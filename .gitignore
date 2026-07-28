@@ -1,0 +1,41 @@
+# Dependances — reinstallables via `npm ci` (package-lock.json est versionne)
+node_modules/
+.npm/
+*.tgz
+
+# Journaux
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+
+# Secrets et configuration locale
+# Le serveur ne manipule aucune cle API (tout est en localhost), mais si un
+# endpoint distant devait etre configure un jour, il passerait par ici.
+.env
+.env.*
+!.env.example
+*.local
+
+# Sorties de tests et de mise au point
+coverage/
+*.tmp
+tmp/
+scratch/
+
+# Editeurs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Systeme
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Artefacts LM Studio — ne doivent jamais entrer dans le depot (plusieurs Go)
+*.gguf
+models/

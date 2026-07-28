@@ -1,0 +1,17 @@
+{
+  "name": "local-llm-mcp",
+  "version": "1.0.0",
+  "description": "Passerelle MCP entre Claude Code et LM Studio — delegue les taches gourmandes en tokens a un modele local",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js"
+  },
+  "keywords": ["mcp", "lmstudio", "llm", "local"],
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "fast-glob": "^3.3.3"
+  }
+}

@@ -1,0 +1,15 @@
+# Normalisation des fins de ligne : LF dans le depot, quelle que soit la plateforme.
+* text=auto eol=lf
+
+# server.js porte un shebang `#!/usr/bin/env node` : en CRLF, le \r fait partie
+# du nom de l'interpreteur et l'execution echoue sous Unix. LF obligatoire.
+*.js   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+# PowerShell : CRLF, attendu par l'ecosysteme Windows.
+*.ps1  text eol=crlf
+
+# Binaires — jamais de conversion.
+*.png  binary
+*.gguf binary
