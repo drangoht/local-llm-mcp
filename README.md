@@ -1,51 +1,53 @@
+English | [Français](README.fr.md)
+
 # local-llm-mcp
 
-Serveur MCP reliant **Claude Code** à **LM Studio**, pour déléguer à un modèle local les
-tâches coûteuses en tokens — sans sacrifier l'agentivité du modèle cloud.
+An MCP server connecting **Claude Code** to **LM Studio**, to offload token-expensive
+work to a local model — without giving up the cloud model's agentic capabilities.
 
-## Le principe
+## The idea
 
-Le pilotage reste sur Claude ; seul le **travail de volume** part en local.
+Claude keeps the driving seat; only the **bulk work** goes local.
 
-Le levier d'économie n'est pas « utiliser un modèle moins cher ». C'est **empêcher le
-contenu brut d'entrer dans le contexte cloud** : les outils lisent les fichiers eux-mêmes,
-côté serveur, et ne renvoient que le résultat du traitement.
+The saving doesn't come from "use a cheaper model." It comes from **keeping raw
+content out of the cloud context**: the tools read the files themselves, on the
+server side, and only return the processed result.
 
 ```
-Claude Code  ──(appel MCP : « résume src/**/*.cs »)──►  local-llm-mcp
+Claude Code  ──(MCP call: "summarize src/**/*.cs")──►  local-llm-mcp
                                                               │
-                                                              ├─ lit les fichiers sur disque
-                                                              ├─ découpe si > contexte local
-                                                              └─ interroge LM Studio :1234
+                                                              ├─ reads the files from disk
+                                                              ├─ chunks if beyond local context
+                                                              └─ queries LM Studio :1234
                                                                        │
-Claude Code  ◄────────(≈700 tokens de synthèse)───────────────────────┘
+Claude Code  ◄────────(≈700 tokens of summary)────────────────────────┘
 ```
 
-Sans cet intermédiaire, lire une arborescence de sources consomme des dizaines de milliers
-de tokens de contexte. Avec, le coût se réduit à la taille de la réponse.
+Without this intermediary, reading a source tree burns tens of thousands of
+context tokens. With it, the cost shrinks to the size of the response.
 
-## Mesures
+## Measurements
 
-Relevées sur un projet Godot/C# réel, avec `qwen3-coder-30b` :
+Recorded on a real Godot/C# project, with `qwen3-coder-30b`:
 
-| Cible | Tokens lus en local | Tokens renvoyés | Durée |
+| Target | Tokens read locally | Tokens returned | Duration |
 |---|---:|---:|---:|
-| Un fichier de 886 lignes (46 Ko) | 13 462 | 757 | 49 s |
-| 8 fichiers de données JSON | 35 537 | 674 | 50 s |
+| One 886-line file (46 KB) | 13,462 | 757 | 49 s |
+| 8 JSON data files | 35,537 | 674 | 50 s |
 
-Le rapport dépend entièrement de la tâche : une synthèse compresse beaucoup, une
-extraction exhaustive beaucoup moins.
+The ratio depends entirely on the task: a summary compresses a lot, an
+exhaustive extraction much less.
 
-## Prérequis
+## Requirements
 
-- [LM Studio](https://lmstudio.ai/) avec son serveur local actif (port 1234 par défaut)
-- Node.js 18 ou plus
+- [LM Studio](https://lmstudio.ai/) with its local server running (port 1234 by default)
+- Node.js 18 or later
 - [Claude Code](https://claude.com/claude-code)
-- Un modèle chargé — voir *Choix du modèle* ci-dessous
+- A loaded model — see *Model choice* below
 
-Testé sur Windows 11. `server.js` n'a pas de dépendance à Windows (le chemin de la CLI
-LM Studio est résolu selon la plateforme), mais seul le script d'appoint `start-local.ps1`
-est spécifique à PowerShell.
+Tested on Windows 11. `server.js` has no Windows-specific dependency (the LM
+Studio CLI path is resolved per platform), but the helper script
+`start-local.ps1` is PowerShell-specific.
 
 ## Installation
 
@@ -55,99 +57,103 @@ cd local-llm-mcp
 npm ci
 ```
 
-Puis enregistrer le serveur auprès de Claude Code, en donnant le **chemin absolu** vers
-`server.js` :
+Then register the server with Claude Code, giving the **absolute path** to
+`server.js`:
 
 ```sh
-claude mcp add local-llm --scope user -- node /chemin/absolu/vers/local-llm-mcp/server.js
+claude mcp add local-llm --scope user -- node /absolute/path/to/local-llm-mcp/server.js
 ```
 
-`--scope user` le rend disponible depuis tous vos projets. Utilisez `--scope project` pour
-le limiter au dépôt courant.
+`--scope user` makes it available across all your projects. Use `--scope project`
+to limit it to the current repo.
 
-Vérification : `claude mcp list` doit afficher `local-llm: ✔ Connected`.
+Verification: `claude mcp list` should show `local-llm: ✔ Connected`.
 
-## Outils exposés
+## Exposed tools
 
-| Outil | Rôle | Économie |
+| Tool | Role | Savings |
 |---|---|---|
-| `local_digest` | Lit des fichiers (globs), applique une instruction, ne renvoie que le résultat. Map-reduce automatique au-delà du contexte local. | **Forte** — l'outil principal |
-| `local_map` | Applique la même instruction à chaque fichier séparément, un résultat par fichier. Traitement par lot. | **Forte** |
-| `local_ask` | Question libre, sans lecture de fichier. Boilerplate, reformulation, message de commit, regex. | Faible |
-| `local_status` | Diagnostic : modèles, alias, contexte réellement chargé. | — |
+| `local_digest` | Reads files (globs), applies an instruction, returns only the result. Automatic map-reduce beyond local context. | **High** — the main tool |
+| `local_map` | Applies the same instruction to each file separately, one result per file. Batch processing. | **High** |
+| `local_ask` | Free-form question, no file reading. Boilerplate, rewording, commit messages, regex. | Low |
+| `local_status` | Diagnostics: models, aliases, context actually loaded. | — |
 
-## Choix du modèle
+## Model choice
 
-Deux alias sont exposés :
+Two aliases are exposed:
 
-| Alias | Modèle par défaut | Remarque |
+| Alias | Default model | Note |
 |---|---|---|
-| `code` *(défaut)* | `qwen/qwen3-coder-30b` | Répond directement, sans phase de raisonnement. |
-| `light` | `google/gemma-4-e4b` | Plus léger en VRAM, mais **raisonne systématiquement**. |
+| `code` *(default)* | `qwen/qwen3-coder-30b` | Answers directly, no reasoning phase. |
+| `light` | `google/gemma-4-e4b` | Lighter on VRAM, but **always reasons**. |
 
-Le défaut retenu est le **plus gros** modèle, ce qui mérite une explication car c'est
-contre-intuitif. Sur une même tâche courte, mesuré :
+The chosen default is the **larger** model, which deserves an explanation since
+it's counter-intuitive. On the same short task, measured:
 
-| | Débit brut | Tokens produits | Dont réflexion interne jetée |
+| | Raw throughput | Tokens produced | Of which discarded internal reasoning |
 |---|---:|---:|---:|
-| `gemma-4-e4b` | 67 tok/s | 347 | ~85 % |
-| `qwen3-coder-30b` | 13,5 tok/s | 19 | 0 |
+| `gemma-4-e4b` | 67 tok/s | 347 | ~85% |
+| `qwen3-coder-30b` | 13.5 tok/s | 19 | 0 |
 
-Le petit modèle est cinq fois plus rapide *par token*, mais en produit dix-huit fois plus
-pour un résultat équivalent. En **sortie utile**, le gros modèle gagne. Le paramètre
-`enable_thinking: false` n'a par ailleurs aucun effet sur ce modèle, et un `max_tokens`
-trop bas fait renvoyer un `content` **vide** — le serveur détecte ce cas et le signale
-explicitement au lieu de retourner une chaîne vide silencieuse.
+The smaller model is five times faster *per token*, but produces eighteen times
+more of them for an equivalent result. In **useful output**, the larger model
+wins. Also, the `enable_thinking: false` parameter has no effect on this model,
+and a `max_tokens` set too low makes it return an **empty** `content` — the
+server detects this case and reports it explicitly instead of silently
+returning an empty string.
 
-À adapter à votre matériel via `LOCAL_MODEL_CODE` / `LOCAL_MODEL_LIGHT`.
+Adjust to your hardware via `LOCAL_MODEL_CODE` / `LOCAL_MODEL_LIGHT`.
 
-## Chargement automatique du modèle
+## Automatic model loading
 
-Au démarrage, le serveur vérifie via `lms ps --json` que le modèle est chargé avec un
-contexte suffisant, et le recharge sinon.
+On startup, the server checks via `lms ps --json` that the model is loaded with
+sufficient context, and reloads it if not.
 
-Ce contrôle existe pour une raison précise : le réglage `defaultContextLength` de LM Studio
-vaut **4096 tokens**. Son chargement à la demande (`justInTimeModelLoading`) ramène donc le
-modèle à 4096 dès que le TTL expire ou que l'application redémarre — et `local_digest`
-casse alors **silencieusement** : réponses tronquées, aucune erreur levée. C'est le mode de
-défaillance le plus pénible parce qu'il est invisible.
+This check exists for a specific reason: LM Studio's `defaultContextLength`
+setting is **4096 tokens**. Its just-in-time loading (`justInTimeModelLoading`)
+therefore brings the model back down to 4096 as soon as the TTL expires or the
+application restarts — and `local_digest` then breaks **silently**: truncated
+responses, no error raised. It's the most painful failure mode because it's
+invisible.
 
-La vérification est **non bloquante** (le handshake MCP reste à ~0,4 s) et ne coûte rien
-quand la configuration est déjà correcte. La désactiver : `LOCAL_AUTOLOAD=0`.
+The check is **non-blocking** (the MCP handshake stays around 0.4 s) and costs
+nothing when the configuration is already correct. Disable it with
+`LOCAL_AUTOLOAD=0`.
 
-`start-local.ps1` (Windows) fait la même chose depuis un terminal, utile pour précharger
-le modèle avant d'ouvrir Claude Code et éviter l'attente au premier appel.
+`start-local.ps1` (Windows) does the same thing from a terminal, useful for
+preloading the model before opening Claude Code to avoid waiting on the first
+call.
 
 ## Configuration
 
-Toutes les variables d'environnement sont optionnelles.
+All environment variables are optional.
 
-| Variable | Défaut | Rôle |
+| Variable | Default | Role |
 |---|---|---|
-| `LMSTUDIO_URL` | `http://localhost:1234/v1` | Endpoint LM Studio |
-| `LOCAL_MODEL_CODE` | `qwen/qwen3-coder-30b` | Modèle de l'alias `code` |
-| `LOCAL_MODEL_LIGHT` | `google/gemma-4-e4b` | Modèle de l'alias `light` |
-| `LOCAL_CONTEXT` | `32768` | Contexte exigé au démarrage |
-| `LOCAL_AUTOLOAD` | `1` | `0` désactive le rechargement automatique |
-| `LOCAL_TTL_SECONDS` | `28800` | Déchargement du modèle après 8 h d'inactivité |
-| `LOCAL_TIMEOUT_MS` | `600000` | Délai max d'un appel (10 min) |
-| `LOCAL_ALLOWED_ROOTS` | *(aucune)* | Racines autorisées en lecture, séparées par `;` |
-| `LMS_CLI` | `~/.lmstudio/bin/lms[.exe]` | Chemin de la CLI LM Studio |
+| `LMSTUDIO_URL` | `http://localhost:1234/v1` | LM Studio endpoint |
+| `LOCAL_MODEL_CODE` | `qwen/qwen3-coder-30b` | Model for the `code` alias |
+| `LOCAL_MODEL_LIGHT` | `google/gemma-4-e4b` | Model for the `light` alias |
+| `LOCAL_CONTEXT` | `32768` | Context required at startup |
+| `LOCAL_AUTOLOAD` | `1` | `0` disables automatic reloading |
+| `LOCAL_TTL_SECONDS` | `28800` | Unload the model after 8 h of inactivity |
+| `LOCAL_TIMEOUT_MS` | `600000` | Max call duration (10 min) |
+| `LOCAL_ALLOWED_ROOTS` | *(none)* | Roots allowed for reading, separated by `;` |
+| `LMS_CLI` | `~/.lmstudio/bin/lms[.exe]` | Path to the LM Studio CLI |
 
-### Restreindre les lectures
+### Restricting reads
 
-Par défaut le serveur peut lire n'importe quel fichier accessible à l'utilisateur. Pour le
-confiner à vos dossiers de code :
+By default the server can read any file accessible to the user. To confine it
+to your code folders:
 
 ```sh
 claude mcp add local-llm --scope user \
-  --env LOCAL_ALLOWED_ROOTS="/chemin/vers/projets" \
-  -- node /chemin/absolu/vers/local-llm-mcp/server.js
+  --env LOCAL_ALLOWED_ROOTS="/path/to/projects" \
+  -- node /absolute/path/to/local-llm-mcp/server.js
 ```
 
-### Timeouts côté Claude Code
+### Timeouts on the Claude Code side
 
-Dans `~/.claude/settings.json` :
+In `~/.claude/settings.json`:
 
 ```json
 "env": {
@@ -156,43 +162,44 @@ Dans `~/.claude/settings.json` :
 }
 ```
 
-`MCP_TOOL_TIMEOUT` généreux est nécessaire : un `local_map` sur plusieurs dizaines de
-fichiers prend plusieurs minutes.
+A generous `MCP_TOOL_TIMEOUT` is necessary: a `local_map` over several dozen
+files takes several minutes.
 
-## Quand déléguer au local, quand rester en cloud
+## When to delegate locally, when to stay in the cloud
 
-| Déléguer au local | Garder en cloud |
+| Delegate locally | Keep in the cloud |
 |---|---|
-| Résumer un gros fichier ou une arborescence | Décider d'une architecture |
-| Extraire une liste (méthodes, TODO, dépendances) | Écrire du code qui doit être juste du premier coup |
-| Classer ou trier des fichiers par critère | Déboguer un problème subtil |
-| Première reconnaissance sur du code inconnu | Raisonnement multi-étapes |
-| Boilerplate, messages de commit, regex | Tout ce qui engage la correction fonctionnelle |
+| Summarizing a large file or a directory tree | Deciding on an architecture |
+| Extracting a list (methods, TODOs, dependencies) | Writing code that must be right the first time |
+| Classifying or sorting files by criteria | Debugging a subtle issue |
+| First pass over unfamiliar code | Multi-step reasoning |
+| Boilerplate, commit messages, regex | Anything that commits to functional correctness |
 
-Règle courte : **le local sert à réduire un volume, pas à trancher une question.**
+Short rule: **local is for reducing volume, not for settling a question.**
 
-## Limites
+## Limitations
 
-- **Le modèle local se trompe.** Il rate des cas limites et invente parfois des noms de
-  méthodes. Sa sortie est un point de départ à vérifier, jamais une conclusion sur un
-  point critique.
-- **Débit modeste** sur un GPU qui ne loge pas le modèle entièrement en VRAM. Sur la
-  configuration de référence (Radeon RX 9070, 16 Go), un modèle 30B en Q4 déborde d'environ
-  3,5 Go et tourne à ~13,5 tok/s. Un `local_map` sur 40 fichiers dure plusieurs minutes.
-- **Pas de streaming** : les résultats arrivent d'un bloc.
-- **Un seul modèle résident** si la VRAM est limitée ; alterner entre alias impose un
-  rechargement (~16 s pour un modèle de 18 Go).
+- **The local model makes mistakes.** It misses edge cases and sometimes
+  invents method names. Its output is a starting point to verify, never a
+  conclusion on anything critical.
+- **Modest throughput** on a GPU that doesn't fully fit the model in VRAM. On
+  the reference setup (Radeon RX 9070, 16 GB), a 30B model in Q4 overflows by
+  about 3.5 GB and runs at ~13.5 tok/s. A `local_map` over 40 files takes
+  several minutes.
+- **No streaming**: results arrive as a single block.
+- **A single resident model** if VRAM is limited; switching between aliases
+  forces a reload (~16 s for an 18 GB model).
 
-## Dépannage
+## Troubleshooting
 
-| Symptôme | Cause probable | Correctif |
+| Symptom | Likely cause | Fix |
 |---|---|---|
-| `LM Studio injoignable` | Application fermée ou serveur arrêté | Ouvrir LM Studio, ou `lms server start` |
-| Réponses tronquées ou incohérentes | Contexte retombé à 4096 | `local_status` pour confirmer, puis redémarrer le serveur MCP |
-| Réponse vide + message sur le raisonnement | Alias `light` avec `max_tokens` trop bas | Passer `model: "code"` ou augmenter `max_tokens` |
-| Premier appel très lent (~20-30 s) | Chargement du modèle | Normal ; précharger avec `start-local.ps1` |
-| Timeout côté Claude Code | `MCP_TOOL_TIMEOUT` trop bas | Voir *Timeouts* ci-dessus |
+| `LM Studio unreachable` | Application closed or server stopped | Open LM Studio, or `lms server start` |
+| Truncated or inconsistent responses | Context dropped back to 4096 | `local_status` to confirm, then restart the MCP server |
+| Empty response + message about reasoning | `light` alias with `max_tokens` too low | Switch to `model: "code"` or raise `max_tokens` |
+| First call very slow (~20-30 s) | Model loading | Normal; preload with `start-local.ps1` |
+| Timeout on the Claude Code side | `MCP_TOOL_TIMEOUT` too low | See *Timeouts* above |
 
-## Licence
+## License
 
-MIT — voir [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE).
