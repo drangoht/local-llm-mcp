@@ -8,8 +8,23 @@
     "start": "node server.js",
     "check": "node --check server.js"
   },
-  "keywords": ["mcp", "lmstudio", "llm", "local"],
+  "keywords": ["mcp", "model-context-protocol", "lmstudio", "llm", "local", "claude-code"],
+  "author": "drangoht",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/drangoht/local-llm-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/drangoht/local-llm-mcp/issues"
+  },
+  "homepage": "https://github.com/drangoht/local-llm-mcp#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "local-llm-mcp": "server.js"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "fast-glob": "^3.3.3"

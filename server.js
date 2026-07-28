@@ -61,7 +61,12 @@ const BINARY_EXT = new Set([
  */
 const LMS_CLI =
   process.env.LMS_CLI ??
-  path.join(process.env.USERPROFILE ?? process.env.HOME ?? "", ".lmstudio", "bin", "lms.exe");
+  path.join(
+    process.env.USERPROFILE ?? process.env.HOME ?? "",
+    ".lmstudio",
+    "bin",
+    process.platform === "win32" ? "lms.exe" : "lms",
+  );
 const REQUIRED_CONTEXT = Number(process.env.LOCAL_CONTEXT ?? 32768);
 const AUTOLOAD = process.env.LOCAL_AUTOLOAD !== "0";
 const TTL_SECONDS = Number(process.env.LOCAL_TTL_SECONDS ?? 8 * 3600);
